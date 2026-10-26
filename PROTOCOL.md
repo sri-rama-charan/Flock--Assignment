@@ -20,7 +20,7 @@ Because it is a modern full-stack SvelteKit application rather than a convention
 - **Endpoint:** `POST /login`
 - **Content-Type:** `application/x-www-form-urlencoded`
 - **Form Fields:**
-  - `email`: Operator email address (e.g. `operator@urja.local`)
+  - `email`: Operator email address (e.g. `operator@example.com`)
   - `password`: Operator password
 - **Required Security Headers (Observed Fact):**
   - `Origin: https://urja-ops.flockenergy.tech`
@@ -96,7 +96,7 @@ Because it is a modern full-stack SvelteKit application rather than a convention
           { "user": 1 },
           { "name": 2, "email": 3 },
           "Ops Desk",
-          "operator@urja.local"
+          "operator@example.com"
         ],
         "uses": {}
       },
