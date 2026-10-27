@@ -51,14 +51,18 @@ async function login() {
     });
 
     if (response.data && response.data.type === 'failure') {
-      throw new Error('Urja Ops portal rejected credentials.');
+      const authErr = new Error('Urja Ops portal rejected credentials.');
+      authErr.status = 502;
+      authErr.code = 'UPSTREAM_AUTH_FAILED';
+      throw authErr;
     }
 
     const sessionActive = await hasValidSession();
     if (!sessionActive) {
-      throw new Error(
-        'Urja Ops portal login succeeded but no session token (auth.session_token) was set.'
-      );
+      const authErr = new Error('Urja Ops portal login succeeded but no session token was set.');
+      authErr.status = 502;
+      authErr.code = 'UPSTREAM_AUTH_FAILED';
+      throw authErr;
     }
 
     return true;
@@ -80,6 +84,12 @@ async function get(endpoint, options = {}) {
 
   try {
     const response = await client.get(endpoint, options);
+    if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+      const err = new Error('Received invalid non-JSON response from Urja Ops portal.');
+      err.status = 502;
+      err.code = 'UPSTREAM_INVALID_RESPONSE';
+      throw err;
+    }
     return response.data;
   } catch (error) {
     if (isAuthError(error) && !options._isRetry) {
@@ -90,6 +100,12 @@ async function get(endpoint, options = {}) {
           ...options,
           _isRetry: true
         });
+        if (typeof retryResponse.data === 'string' && retryResponse.data.trim().startsWith('<')) {
+          const err = new Error('Received invalid non-JSON response from Urja Ops portal.');
+          err.status = 502;
+          err.code = 'UPSTREAM_INVALID_RESPONSE';
+          throw err;
+        }
         return retryResponse.data;
       } catch (retryError) {
         throw formatError(retryError);
@@ -107,31 +123,71 @@ function isAuthError(error) {
 
 function formatError(error) {
   if (!error) {
-    return new Error('Urja Ops portal communication error.');
+    const err = new Error('Urja Ops portal communication error.');
+    err.status = 502;
+    err.code = 'UPSTREAM_ERROR';
+    return err;
   }
 
-  if (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout'))) {
-    return new Error('Urja Ops portal request timed out. Please try again.');
+  if (error.status && error.code) {
+    return error;
   }
 
-  if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-    return new Error(
-      'Unable to connect to the Urja Ops portal. Please check network and PORTAL_BASE_URL.'
-    );
+  if (error.code === 'ECONNABORTED' || (error.message && error.message.toLowerCase().includes('timeout'))) {
+    const err = new Error('Urja Ops portal request timed out. Please try again later.');
+    err.status = 504;
+    err.code = 'UPSTREAM_TIMEOUT';
+    return err;
+  }
+
+  if (
+    error.code === 'ECONNREFUSED' ||
+    error.code === 'ENOTFOUND' ||
+    error.code === 'EAI_AGAIN' ||
+    error.code === 'ECONNRESET'
+  ) {
+    const err = new Error('Unable to connect to the Urja Ops portal. Please check network connection and portal availability.');
+    err.status = 503;
+    err.code = 'UPSTREAM_UNAVAILABLE';
+    return err;
   }
 
   if (error.response) {
     const status = error.response.status;
     if (status === 401 || status === 403) {
-      return new Error(`Urja Ops portal authentication failed (HTTP ${status}).`);
+      const err = new Error('Urja Ops portal authentication failed.');
+      err.status = 502;
+      err.code = 'UPSTREAM_AUTH_FAILED';
+      return err;
+    }
+    if (status === 404) {
+      const err = new Error('Resource not found on Urja Ops portal.');
+      err.status = 404;
+      err.code = 'UPSTREAM_NOT_FOUND';
+      return err;
+    }
+    if (status === 429) {
+      const err = new Error('Urja Ops portal rate limit exceeded. Please try again later.');
+      err.status = 503;
+      err.code = 'UPSTREAM_RATE_LIMITED';
+      return err;
     }
     if (status >= 500) {
-      return new Error(`Urja Ops portal server error (HTTP ${status}).`);
+      const err = new Error(`Urja Ops portal encountered an internal error (HTTP ${status}).`);
+      err.status = 502;
+      err.code = 'UPSTREAM_SERVER_ERROR';
+      return err;
     }
-    return new Error(`Urja Ops portal request failed with status ${status}.`);
+    const err = new Error(`Urja Ops portal request rejected with status ${status}.`);
+    err.status = 502;
+    err.code = 'UPSTREAM_ERROR';
+    return err;
   }
 
-  return new Error(error.message || 'Urja Ops portal request failed.');
+  const err = new Error(error.message || 'Urja Ops portal request failed.');
+  err.status = 502;
+  err.code = 'UPSTREAM_ERROR';
+  return err;
 }
 
 module.exports = {

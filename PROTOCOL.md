@@ -164,8 +164,11 @@ Because it is a modern full-stack SvelteKit application rather than a convention
 
 ---
 
-### Endpoint 4: Meter Energy / Consumption Readings (Observed)
-- **Endpoint:** `GET /portal/meters/{meterId}/energy`
+### Endpoint 4: Upstream Meter Energy / Consumption Readings (Observed Upstream Only)
+
+> **Important Scope Note:** This is an internal upstream portal endpoint observed during network inspection of the legacy portal. It is **not** exposed as a public endpoint by the Flock Energy API wrapper.
+
+- **Upstream Endpoint:** `GET /portal/meters/{meterId}/energy`
 - **Authentication:** Requires `__Secure-better-auth.session_token` cookie.
 - **Observed Response Shape (`HTTP 200`):**
   ```json
@@ -185,11 +188,14 @@ Because it is a modern full-stack SvelteKit application rather than a convention
 
 ## 4. Summary of Facts vs. Assumptions
 
-| Item | Status | Evidence |
+| Item | Status | Evidence / Notes |
 | :--- | :---: | :--- |
-| **Login Content-Type** | **Observed Fact** | HTML `<form method="POST">` rendered with `email` and `password` inputs. Form submissions succeeded with `application/x-www-form-urlencoded`. |
-| **CSRF Requirement** | **Observed Fact** | Requests without `Origin` failed with `HTTP 403 Cross-site POST form submissions are forbidden`. |
-| **Cookie Name** | **Observed Fact** | Set-Cookie header explicitly names `__Secure-better-auth.session_token`. |
+| **Login Content-Type** | **Observed Fact** | HTML `<form method="POST">` rendered with `email` and `password` inputs. Submissions succeed with `application/x-www-form-urlencoded`. |
+| **CSRF Requirement** | **Observed Fact** | Requests without matching `Origin` and `Referer` fail with `HTTP 403 Cross-site POST form submissions are forbidden`. |
+| **Cookie Name** | **Observed Fact** | Upstream `Set-Cookie` header explicitly sets `__Secure-better-auth.session_token` on HTTPS origins. |
 | **Cookie Max-Age** | **Observed Fact** | `Max-Age=3600` observed in upstream `Set-Cookie` header. |
 | **Details Serialization** | **Observed Fact** | `GET /meters/{id}/__data.json` returns flattened token indices created by SvelteKit's `devalue` serializer. |
-| **Session Lifetime** | **Assumption** | Assumed 1 hour based on `Max-Age=3600`. The client handles premature expiration gracefully by catching `HTTP 401/403` and re-authenticating. |
+| **Location Coordinates** | **Observed Fact** | `GET /portal/meters/{id}/geo` returns numeric coordinates formatted as strings within `{ data: { latitude, longitude } }`. Nonexistent meters return HTTP 404. |
+| **Energy Endpoint Scope** | **Observed Fact** | Discovered in upstream portal; deliberately excluded from public API endpoints to match the 4 required routes. |
+| **Session Lifetime** | **Assumption** | Assumed 1 hour based on `Max-Age=3600`. The client handles premature expiration gracefully by catching `HTTP 401/403` and re-authenticating once. |
+| **Upstream Load / Concurrency** | **Assumption** | Portal performance under high concurrent load is unknown; client maintains in-memory session and reuses cookies across calls. |

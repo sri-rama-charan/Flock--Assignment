@@ -36,16 +36,17 @@
     "/api/v1/meters": {
       "get": {
         "summary": "List & Search Meters",
-        "description": "Retrieve paginated meter records, optionally filtered by search text (serial number, meter ID, make, etc.).",
+        "description": "Retrieve paginated meter records, optionally filtered by search text (serial number, meter ID, or make). When both 'search' and 'q' query parameters are provided, 'search' takes precedence.",
         "parameters": [
           {
             "name": "page",
             "in": "query",
             "required": false,
-            "description": "Page number (must be an integer >= 1).",
+            "description": "Page number (must be an integer between 1 and 1,000,000). Defaults to 1.",
             "schema": {
               "type": "integer",
               "minimum": 1,
+              "maximum": 1000000,
               "default": 1
             }
           },
@@ -53,24 +54,26 @@
             "name": "search",
             "in": "query",
             "required": false,
-            "description": "Search term matching serialNo, meterId, or make.",
+            "description": "Search term matching serialNo, meterId, or make (max 200 characters). Takes precedence over 'q' if both are provided.",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Alias for search parameter.",
+            "description": "Alternative query parameter matching serialNo, meterId, or make (max 200 characters). Ignored if 'search' is also provided.",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of meter records",
+            "description": "Paginated list of meter records retrieved successfully",
             "content": {
               "application/json": {
                 "schema": {
@@ -95,34 +98,81 @@
             }
           },
           "400": {
-            "description": "Invalid input query parameters",
+            "description": "Invalid input query parameters (e.g. invalid page, non-string search, or search query exceeding 200 characters)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "Invalid page: page must be a positive integer greater than or equal to 1."
+                  "error": {
+                    "code": "INVALID_PAGE",
+                    "message": "Invalid page: page must be a positive integer between 1 and 1,000,000."
+                  }
                 }
               }
             }
           },
           "502": {
-            "description": "Upstream portal communication failure",
+            "description": "Upstream portal communication failure, authentication rejection, or malformed response",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_AUTH_FAILED",
+                    "message": "Urja Ops portal authentication failed."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream service unavailable (connection failure / DNS error) or rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_UNAVAILABLE",
+                    "message": "Unable to connect to the Urja Ops portal. Please check network connection and portal availability."
+                  }
                 }
               }
             }
           },
           "504": {
-            "description": "Upstream portal timeout",
+            "description": "Upstream portal request timed out (10s threshold)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_TIMEOUT",
+                    "message": "Urja Ops portal request timed out. Please try again later."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An unexpected internal server error occurred."
+                  }
                 }
               }
             }
@@ -139,9 +189,10 @@
             "name": "meterId",
             "in": "path",
             "required": true,
-            "description": "Unique meter identifier (e.g. J100000)",
+            "description": "Unique meter identifier (e.g. J100000, max 100 characters).",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 100
             }
           }
         ],
@@ -182,37 +233,97 @@
             }
           },
           "400": {
-            "description": "Invalid meter ID supplied",
+            "description": "Invalid meter ID supplied (empty, whitespace-only, illegal characters, or exceeding 100 characters)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "Invalid meterId: meterId must be a non-empty string."
+                  "error": {
+                    "code": "INVALID_METER_ID",
+                    "message": "Invalid meterId: meterId must be a non-empty string."
+                  }
                 }
               }
             }
           },
           "404": {
-            "description": "Meter not found",
+            "description": "Meter not found in the upstream portal",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "Meter not found"
+                  "error": {
+                    "code": "METER_NOT_FOUND",
+                    "message": "Meter 'NON_EXISTENT_MTR' not found on Urja Ops portal."
+                  }
                 }
               }
             }
           },
           "502": {
-            "description": "Upstream portal failure",
+            "description": "Upstream portal communication failure, authentication rejection, or malformed payload",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_INVALID_RESPONSE",
+                    "message": "Invalid response received from Urja Ops portal."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream service unavailable (connection failure / DNS error) or rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_UNAVAILABLE",
+                    "message": "Unable to connect to the Urja Ops portal. Please check network connection and portal availability."
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream portal request timed out (10s threshold)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_TIMEOUT",
+                    "message": "Urja Ops portal request timed out. Please try again later."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An unexpected internal server error occurred."
+                  }
                 }
               }
             }
@@ -229,9 +340,10 @@
             "name": "meterId",
             "in": "path",
             "required": true,
-            "description": "Unique meter identifier (e.g. J100000)",
+            "description": "Unique meter identifier (e.g. J100000, max 100 characters).",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 100
             }
           }
         ],
@@ -255,37 +367,97 @@
             }
           },
           "400": {
-            "description": "Invalid meter ID supplied",
+            "description": "Invalid meter ID supplied (empty, whitespace-only, illegal characters, or exceeding 100 characters)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "Invalid meterId: meterId must be a non-empty string."
+                  "error": {
+                    "code": "INVALID_METER_ID",
+                    "message": "Invalid meterId: meterId must be a non-empty string."
+                  }
                 }
               }
             }
           },
           "404": {
-            "description": "Location not found for meter",
+            "description": "Location coordinates not found for requested meter",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "Location not found for meter 'NON_EXISTENT_MTR'."
+                  "error": {
+                    "code": "LOCATION_NOT_FOUND",
+                    "message": "Location not found for meter 'NON_EXISTENT_MTR'."
+                  }
                 }
               }
             }
           },
           "502": {
-            "description": "Upstream portal failure",
+            "description": "Upstream portal communication failure, malformed payload, or out-of-range coordinates",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "INVALID_LOCATION_COORDINATES",
+                    "message": "Location coordinates for meter 'J100000' are outside valid geographic range."
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream service unavailable (connection failure / DNS error) or rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_UNAVAILABLE",
+                    "message": "Unable to connect to the Urja Ops portal. Please check network connection and portal availability."
+                  }
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Upstream portal request timed out (10s threshold)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "UPSTREAM_TIMEOUT",
+                    "message": "Urja Ops portal request timed out. Please try again later."
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": {
+                    "code": "INTERNAL_SERVER_ERROR",
+                    "message": "An unexpected internal server error occurred."
+                  }
                 }
               }
             }
@@ -390,7 +562,8 @@
                   "$ref": "#/components/schemas/NameplateParameter"
                 }
               }
-            }
+            },
+            "required": ["data"]
           },
           "hierarchy": {
             "type": "object",
@@ -432,17 +605,28 @@
                 "type": "string",
                 "example": "75.83095696146852"
               }
-            }
+            },
+            "required": ["latitude", "longitude"]
           }
         },
-        "required": ["latitude", "longitude"]
+        "required": ["latitude", "longitude", "data"]
       },
       "ErrorResponse": {
         "type": "object",
         "properties": {
           "error": {
-            "type": "string",
-            "example": "Meter not found"
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "METER_NOT_FOUND"
+              },
+              "message": {
+                "type": "string",
+                "example": "Meter 'NON_EXISTENT_MTR' not found on Urja Ops portal."
+              }
+            },
+            "required": ["code", "message"]
           }
         },
         "required": ["error"]

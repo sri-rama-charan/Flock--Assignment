@@ -37,7 +37,7 @@ The codebase separates concerns into four distinct layers:
 - This endpoint uses SvelteKit's `devalue` format (storing object graphs as indexed token arrays). A lightweight recursive deserializer (`unflattenSvelteKitData`) resolves these token indices cleanly, preserving the upstream nameplate array and hierarchy structure without scraping HTML.
 
 ### D. Zero Credential & Secret Leakage
-- Upstream network errors, stack traces, raw cookies, and authentication passwords are never printed to logs or returned in HTTP error payloads. All API errors are normalized to `{ "error": "<sanitized_message>" }`.
+- Upstream network errors, stack traces, raw cookies, and authentication passwords are never printed to logs or returned in HTTP error payloads. All API errors are normalized to `{ "error": { "code": "<CODE>", "message": "<sanitized_message>" } }`.
 
 ---
 

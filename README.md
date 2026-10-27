@@ -132,8 +132,8 @@ Retrieves paginated meter records, with optional search filtering by serial numb
 - **Method:** `GET`
 - **Path:** `/api/v1/meters`
 - **Query Parameters:**
-  - `page` *(optional, integer >= 1, default: 1)*: Page number.
-  - `search` or `q` *(optional, string)*: Filter query matching meter ID, serial number, etc.
+  - `page` *(optional, integer >= 1, default: 1)*: Page number (1 to 1,000,000).
+  - `search` or `q` *(optional, string)*: Filter query matching meter ID, serial number, or make (max 200 characters). If both `search` and `q` are provided, `search` takes precedence.
 - **Success Response:** `200 OK`
   ```json
   {
@@ -155,7 +155,12 @@ Retrieves paginated meter records, with optional search filtering by serial numb
 - **Error Responses:**
   - `400 Bad Request` (Invalid page number):
     ```json
-    { "error": "Invalid page: page must be a positive integer greater than or equal to 1." }
+    {
+      "error": {
+        "code": "INVALID_PAGE",
+        "message": "Invalid page: page must be a positive integer greater than or equal to 1."
+      }
+    }
     ```
 
 ---
@@ -166,7 +171,7 @@ Retrieves nameplate parameters and electrical hierarchy for a single meter.
 - **Method:** `GET`
 - **Path:** `/api/v1/meters/:meterId`
 - **Path Parameters:**
-  - `meterId` *(required, string)*: Unique meter identifier (e.g. `J100000`).
+  - `meterId` *(required, string)*: Unique meter identifier (e.g. `J100000`, max 100 characters).
 - **Success Response:** `200 OK`
   ```json
   {
@@ -198,11 +203,21 @@ Retrieves nameplate parameters and electrical hierarchy for a single meter.
 - **Error Responses:**
   - `400 Bad Request` (Empty or whitespace ID):
     ```json
-    { "error": "Invalid meterId: meterId must be a non-empty string." }
+    {
+      "error": {
+        "code": "INVALID_METER_ID",
+        "message": "Invalid meterId: meterId must be a non-empty string."
+      }
+    }
     ```
   - `404 Not Found` (Meter not found):
     ```json
-    { "error": "Meter not found" }
+    {
+      "error": {
+        "code": "METER_NOT_FOUND",
+        "message": "Meter 'NON_EXISTENT_MTR' not found on Urja Ops portal."
+      }
+    }
     ```
 
 ---
@@ -228,27 +243,54 @@ Retrieves geographic coordinates (latitude and longitude) for a specific meter.
 - **Error Responses:**
   - `400 Bad Request`:
     ```json
-    { "error": "Invalid meterId: meterId must be a non-empty string." }
+    {
+      "error": {
+        "code": "INVALID_METER_ID",
+        "message": "Invalid meterId: meterId must be a non-empty string."
+      }
+    }
     ```
   - `404 Not Found`:
     ```json
-    { "error": "Location not found for meter 'NON_EXISTENT_MTR'." }
+    {
+      "error": {
+        "code": "LOCATION_NOT_FOUND",
+        "message": "Location not found for meter 'NON_EXISTENT_MTR'."
+      }
+    }
     ```
 
 ---
 
 ## Error Handling & Status Codes
 
-All errors adhere to a consistent JSON format: `{ "error": "<sanitized_message>" }`.
+All API errors return a standardized JSON structure with machine-readable error codes and human-friendly messages:
 
-| Status Code | Meaning | Cause |
-| :---: | :--- | :--- |
-| **`400`** | Bad Request | Missing/empty `meterId`, non-string queries, or non-integer / `<= 0` page numbers. |
-| **`404`** | Not Found | Requested meter or location does not exist in the portal. |
-| **`502`** | Bad Gateway | Upstream portal rejected credentials or returned unexpected upstream failures. |
-| **`503`** | Service Unavailable | Connection refused or network unreachable when contacting Urja Ops portal. |
-| **`504`** | Gateway Timeout | Upstream portal request exceeded 10,000ms timeout threshold. |
-| **`500`** | Internal Server Error | Unhandled runtime error (sanitized to prevent stack or credential leakage). |
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error description"
+  }
+}
+```
+
+| Status Code | Error Code | Description | Typical Cause |
+| :---: | :--- | :--- | :--- |
+| **`400`** | `INVALID_PAGE` | Invalid pagination parameter | Non-integer, negative, zero, empty, or `> 1,000,000` page number. |
+| **`400`** | `INVALID_QUERY` | Invalid search query | Non-string search query or query exceeding 200 characters. |
+| **`400`** | `INVALID_METER_ID` | Malformed meter ID | Missing, empty, whitespace-only, illegal chars, or `> 100` characters. |
+| **`404`** | `METER_NOT_FOUND` | Meter not found | Meter identifier does not exist in the upstream portal. |
+| **`404`** | `LOCATION_NOT_FOUND` | Location not found | Location coordinates not found for the requested meter. |
+| **`404`** | `ROUTE_NOT_FOUND` | Unknown API endpoint | Request made to an unregistered URL path or method. |
+| **`502`** | `UPSTREAM_AUTH_FAILED` | Upstream authentication failed | Upstream portal rejected credentials or session token missing. |
+| **`502`** | `UPSTREAM_INVALID_RESPONSE` | Malformed upstream payload | Portal returned non-JSON, unexpected structure, or incomplete data. |
+| **`502`** | `INVALID_LOCATION_COORDINATES`| Invalid coordinates | Upstream coordinates are non-numeric or outside [-90..90, -180..180]. |
+| **`502`** | `UPSTREAM_SERVER_ERROR` | Upstream internal error | Urja Ops portal returned HTTP 5xx server error. |
+| **`503`** | `UPSTREAM_UNAVAILABLE` | Service unavailable | Network connection refused or portal domain unreachable. |
+| **`503`** | `UPSTREAM_RATE_LIMITED` | Upstream rate limited | Upstream portal rate limit exceeded (HTTP 429). |
+| **`504`** | `UPSTREAM_TIMEOUT` | Gateway timeout | Upstream request exceeded the 10,000ms timeout window. |
+| **`500`** | `INTERNAL_SERVER_ERROR` | Internal server error | Unhandled application error (sanitized, stack traces suppressed). |
 
 ---
 
