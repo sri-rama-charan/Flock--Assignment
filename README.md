@@ -20,7 +20,7 @@ flock-energy-api/
 │   ├── services/
 │   │   └── meter.service.js   # Business logic, input validation, and SvelteKit devalue deserialization
 │   ├── controllers/
-│   │   └── meter.controller.js# Request parsing, HTTP status mapping (200, 400, 404, 502, 504)
+│   │   └── meter.controller.js# Request parsing, HTTP status mapping (200, 400, 404, 502, 503, 504)
 │   └── routes/
 │       └── meter.routes.js    # Express Router definitions for /api/v1/meters
 ├── .env.example               # Template environment configuration
@@ -64,8 +64,9 @@ flock-energy-api/
 - **Package Manager**: `npm` `9.0.0` or higher
 
 ```bash
-# Clone and enter workspace
-cd Flock_Assignment
+# Clone and enter repository
+git clone https://github.com/sri-rama-charan/Flock--Assignment.git
+cd Flock--Assignment
 
 # Install dependencies
 npm install
@@ -158,7 +159,7 @@ Retrieves paginated meter records, with optional search filtering by serial numb
     {
       "error": {
         "code": "INVALID_PAGE",
-        "message": "Invalid page: page must be a positive integer greater than or equal to 1."
+        "message": "Invalid page: page must be a positive integer between 1 and 1,000,000."
       }
     }
     ```
