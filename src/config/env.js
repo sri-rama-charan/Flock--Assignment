@@ -1,12 +1,7 @@
 const dotenv = require('dotenv');
 
-// Load environment variables from .env file
 dotenv.config();
 
-/**
- * Validate and export application configuration.
- * Reads server port, portal base URL, and portal credentials.
- */
 function loadConfig() {
   const rawPort = process.env.PORT || '3000';
   const port = parseInt(rawPort, 10);
@@ -28,7 +23,7 @@ function loadConfig() {
 
   return {
     port,
-    portalBaseUrl: portalBaseUrl.trim().replace(/\/+$/, ''), // strip trailing slash
+    portalBaseUrl: portalBaseUrl.trim().replace(/\/+$/, ''),
     portalUsername: portalUsername.trim(),
     portalPassword,
     nodeEnv: process.env.NODE_ENV || 'development'
